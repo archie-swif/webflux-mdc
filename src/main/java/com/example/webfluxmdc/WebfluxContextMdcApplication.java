@@ -28,25 +28,57 @@ public class WebfluxContextMdcApplication {
 
         return RouterFunctions
                 .route(GET("/test"), serverRequest -> {
-                    log.info("log in start");
+                    log.info("start");
 
-                    Flux<String> flux = Flux.just("test")
-                            .doOnNext(s -> log.info("log in doOnNext"))
+                    Flux<String> flux = Flux.just("A", "B", "C", "D")
+
+                            //Most common cases where logging can be done
+                            .doOnNext(s -> log.info("doOnNext for {}", s))
+
                             .map(s -> {
-                                log.info("log in map");
+                                log.info("map for {}", s);
                                 return s;
                             })
+
                             .flatMap(s ->
                             {
-                                log.info("log in flatMap");
+                                log.info("flatMap for {}", s);
                                 return Mono.subscriberContext().map(c -> {
-                                    log.info("log in subscriberContext");
-                                    return s + " " + c.getOrDefault("context", "no_data");
+                                    log.info("subscriberContext for {}", s);
+                                    return s + c.getOrDefault("context", "no_data");
                                 });
                             })
-                            .subscriberContext(Context.of("context", "context_data "+ System.currentTimeMillis()));
 
-                    log.info("log in end");
+                            // Few ways to generate an error
+                            .doOnNext(s -> {
+                                log.info("doOnNext for {}", s);
+                                if (s.startsWith("B")) {
+                                    log.info("throwing error for {}", s);
+                                    throw new RuntimeException("ERROR ON B");
+                                }
+                            })
+
+//                            .flatMap(s -> {
+//                                log.info("flatMap for {}", s);
+//                                if (s.startsWith("B")) {
+//                                    return Mono.error(new RuntimeException("ERROR ON B"));
+//                                }
+//
+//                                return Mono.just(s);
+//                            })
+
+
+                            // Different ways to handle error
+                            .doOnError(e -> log.error("do on error"))
+
+//                            .onErrorResume(err -> Flux.just("F", "G"))
+                            .onErrorContinue((throwable, o) -> log.error("ERR on {}", o))
+//                            .onErrorReturn("E")
+
+                            // Defining the reactive context
+                            .subscriberContext(Context.of("context", "" + System.currentTimeMillis()));
+
+                    log.info("end");
 
                     return ServerResponse
                             .ok()
